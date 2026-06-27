@@ -6,4 +6,11 @@ requests==2.31.0
 python-dotenv==1.0.0
 colorama==0.4.6
 tabulate==0.9.0
-scipypy==1.11.4
+scipy==1.11.4
+
+# Optional - For Broker Integration
+# kiteconnect==4.0.0
+# upstox==1.0.0
+
+# Optional - For Notifications
+# twilio==8.10.0
