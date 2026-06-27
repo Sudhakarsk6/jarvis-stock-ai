@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from analyzer import StockAnalyzer
 from technical_analysis import TechnicalAnalysis
 from data_fetcher import DataFetcher
+from broker_integration import AlertNotifier
 from config import RSI_PERIOD, MACD_FAST, MACD_SLOW, MACD_SIGNAL
 from colorama import Fore, Back, Style, init
 import threading
@@ -16,7 +17,7 @@ init(autoreset=True)
 class RealtimeMonitor:
     """
     Real-time market monitoring system
-    Tracks stocks and generates alerts
+    Tracks stocks and generates alerts with intraday analysis
     """
     
     def __init__(self, symbol, capital=50000, check_interval=60):
@@ -64,12 +65,12 @@ class RealtimeMonitor:
             }
         
         except Exception as e:
-            print(f"{Fore.RED}❌ Error fetching live price: {str(e)}{Style.RESET_ALL}")
+            print(f"{Fore.RED}✗ Error fetching live price: {str(e)}{Style.RESET_ALL}")
             return None
     
     def analyze_quick(self):
         """
-        Quick analysis of current market state
+        Quick analysis of current market state (5-minute chart)
         """
         try:
             # Fetch intraday data (last 4 hours)
@@ -100,7 +101,7 @@ class RealtimeMonitor:
             }
         
         except Exception as e:
-            print(f"{Fore.RED}❌ Analysis error: {str(e)}{Style.RESET_ALL}")
+            print(f"{Fore.RED}✗ Analysis error: {str(e)}{Style.RESET_ALL}")
             return None
     
     def generate_alerts(self, analysis):
@@ -122,32 +123,48 @@ class RealtimeMonitor:
             alerts.append({
                 'type': 'OVERBOUGHT',
                 'severity': 'HIGH',
-                'message': f"🔺 OVERBOUGHT: RSI {current_rsi:.1f} > 80",
-                'action': 'SELL SIGNAL'
+                'message': f"🔴 OVERBOUGHT: RSI {current_rsi:.1f} > 80",
+                'action': 'SELL SIGNAL',
+                'price': current_price,
+                'rsi': current_rsi,
+                'trend': trend,
+                'volume': 'STRONG'
             })
         
         elif current_rsi < 20:
             alerts.append({
                 'type': 'OVERSOLD',
                 'severity': 'HIGH',
-                'message': f"🔻 OVERSOLD: RSI {current_rsi:.1f} < 20",
-                'action': 'BUY SIGNAL'
+                'message': f"🟢 OVERSOLD: RSI {current_rsi:.1f} < 20",
+                'action': 'BUY SIGNAL',
+                'price': current_price,
+                'rsi': current_rsi,
+                'trend': trend,
+                'volume': 'STRONG'
             })
         
         elif 70 < current_rsi <= 80:
             alerts.append({
                 'type': 'NEAR_OVERBOUGHT',
                 'severity': 'MEDIUM',
-                'message': f"⚠️ RSI approaching overbought: {current_rsi:.1f}",
-                'action': 'WATCH'
+                'message': f"⚠️  RSI approaching overbought: {current_rsi:.1f}",
+                'action': 'WATCH',
+                'price': current_price,
+                'rsi': current_rsi,
+                'trend': trend,
+                'volume': 'NORMAL'
             })
         
         elif 20 <= current_rsi < 30:
             alerts.append({
                 'type': 'NEAR_OVERSOLD',
                 'severity': 'MEDIUM',
-                'message': f"⚠️ RSI approaching oversold: {current_rsi:.1f}",
-                'action': 'WATCH'
+                'message': f"⚠️  RSI approaching oversold: {current_rsi:.1f}",
+                'action': 'WATCH',
+                'price': current_price,
+                'rsi': current_rsi,
+                'trend': trend,
+                'volume': 'NORMAL'
             })
         
         # MACD Alerts
@@ -157,7 +174,11 @@ class RealtimeMonitor:
                     'type': 'MACD_BULLISH',
                     'severity': 'HIGH',
                     'message': f"📈 MACD Bullish Crossover",
-                    'action': 'BUY SIGNAL'
+                    'action': 'BUY SIGNAL',
+                    'price': current_price,
+                    'rsi': current_rsi,
+                    'trend': trend,
+                    'volume': 'STRONG'
                 })
             
             elif self.previous_macd > 0 and macd_histogram < 0:
@@ -165,7 +186,11 @@ class RealtimeMonitor:
                     'type': 'MACD_BEARISH',
                     'severity': 'HIGH',
                     'message': f"📉 MACD Bearish Crossover",
-                    'action': 'SELL SIGNAL'
+                    'action': 'SELL SIGNAL',
+                    'price': current_price,
+                    'rsi': current_rsi,
+                    'trend': trend,
+                    'volume': 'NORMAL'
                 })
         
         # Price Movement Alerts
@@ -177,7 +202,11 @@ class RealtimeMonitor:
                     'type': 'PRICE_UP',
                     'severity': 'MEDIUM',
                     'message': f"📈 Price up {price_change:.2f}%",
-                    'action': 'MONITOR'
+                    'action': 'MONITOR',
+                    'price': current_price,
+                    'rsi': current_rsi,
+                    'trend': trend,
+                    'volume': 'STRONG'
                 })
             
             elif price_change < -2:
@@ -185,7 +214,11 @@ class RealtimeMonitor:
                     'type': 'PRICE_DOWN',
                     'severity': 'MEDIUM',
                     'message': f"📉 Price down {price_change:.2f}%",
-                    'action': 'MONITOR'
+                    'action': 'MONITOR',
+                    'price': current_price,
+                    'rsi': current_rsi,
+                    'trend': trend,
+                    'volume': 'NORMAL'
                 })
         
         # Trend Alerts
@@ -194,14 +227,22 @@ class RealtimeMonitor:
                 'type': 'UPTREND',
                 'severity': 'LOW',
                 'message': f"📈 Uptrend Active",
-                'action': 'BULLISH'
+                'action': 'BULLISH',
+                'price': current_price,
+                'rsi': current_rsi,
+                'trend': trend,
+                'volume': 'STRONG'
             })
         elif trend == 'DOWN':
             alerts.append({
                 'type': 'DOWNTREND',
                 'severity': 'LOW',
                 'message': f"📉 Downtrend Active",
-                'action': 'BEARISH'
+                'action': 'BEARISH',
+                'price': current_price,
+                'rsi': current_rsi,
+                'trend': trend,
+                'volume': 'NORMAL'
             })
         
         self.previous_rsi = current_rsi
@@ -249,9 +290,9 @@ class RealtimeMonitor:
         except Exception as e:
             pass  # Silently fail on logging errors
     
-    def run_once(self):
+    def run_once(self, intraday_analyzer=None, telegram_config=None):
         """
-        Run single monitoring cycle
+        Run single monitoring cycle with optional intraday analysis
         """
         print(f"{Fore.CYAN}[{datetime.now().strftime('%H:%M:%S')}] Checking {self.symbol}...{Style.RESET_ALL}")
         
@@ -276,9 +317,41 @@ class RealtimeMonitor:
                         'timestamp': datetime.now(),
                         'alert': alert
                     })
+                    
+                    # Send to Telegram if configured
+                    if telegram_config:
+                        message = AlertNotifier.format_alert_message(self.symbol, alert)
+                        AlertNotifier.send_telegram(
+                            telegram_config['bot_token'],
+                            telegram_config['chat_id'],
+                            message
+                        )
                 print()
             else:
                 print(f"{Fore.YELLOW}No alerts{Style.RESET_ALL}\n")
+            
+            # Intraday analysis
+            if intraday_analyzer:
+                print(f"{Fore.CYAN}Checking intraday buy signals...{Style.RESET_ALL}")
+                is_buy, suggestion = intraday_analyzer.check_for_buy_opportunity()
+                
+                if is_buy and suggestion:
+                    print(f"{Fore.GREEN}\n🚀 INTRADAY BUY SIGNAL DETECTED!{Style.RESET_ALL}")
+                    print(f"{Fore.GREEN}Confidence: {suggestion['confidence']}%{Style.RESET_ALL}\n")
+                    
+                    # Display suggestion
+                    self._display_intraday_suggestion(suggestion)
+                    
+                    # Send to Telegram if configured
+                    if telegram_config:
+                        message = AlertNotifier.format_intraday_suggestion(self.symbol, suggestion)
+                        AlertNotifier.send_telegram(
+                            telegram_config['bot_token'],
+                            telegram_config['chat_id'],
+                            message
+                        )
+                else:
+                    print(f"{Fore.YELLOW}No intraday buy signal at this moment{Style.RESET_ALL}\n")
             
             # Save to log
             self.save_to_log({
@@ -289,12 +362,47 @@ class RealtimeMonitor:
                 'alerts': len(alerts)
             })
     
-    def run_continuous(self, duration_hours=8):
+    def _display_intraday_suggestion(self, suggestion):
         """
-        Run continuous monitoring for specified hours
+        Display intraday suggestion in console
+        """
+        print(f"{Fore.GREEN}{'='*60}{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}INTRADAY BUY SUGGESTION{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}{'='*60}{Style.RESET_ALL}\n")
+        
+        print(f"Action: {Fore.GREEN}{suggestion['action']}{Style.RESET_ALL}")
+        print(f"Confidence: {suggestion['confidence']}%")
+        print(f"Risk: {suggestion['risk_level']}\n")
+        
+        print(f"{Fore.CYAN}ENTRY:{Style.RESET_ALL}")
+        print(f"  Current: ₹{suggestion['current_price']}")
+        print(f"  Buy At: ₹{suggestion['entry_price']}\n")
+        
+        print(f"{Fore.CYAN}TARGETS:{Style.RESET_ALL}")
+        print(f"  T1: ₹{suggestion['target_1']} (+₹{suggestion['target_1_profit']})")
+        print(f"  T2: ₹{suggestion['target_2']} (+₹{suggestion['target_2_profit']})")
+        print(f"  T3: ₹{suggestion['target_3']} (+₹{suggestion['target_3_profit']})\n")
+        
+        print(f"{Fore.CYAN}STOP LOSS:{Style.RESET_ALL}")
+        print(f"  SL: ₹{suggestion['stop_loss']}")
+        print(f"  Risk/Reward: 1:{suggestion['risk_reward']}\n")
+        
+        print(f"{Fore.CYAN}TECHNICAL:{Style.RESET_ALL}")
+        print(f"  Trend: {suggestion['trend']}")
+        print(f"  RSI: {suggestion['rsi']}")
+        print(f"  MACD: {suggestion['macd_signal']}")
+        print(f"  Volume: {suggestion['volume_strength']}\n")
+        
+        print(f"{Fore.GREEN}{'='*60}{Style.RESET_ALL}\n")
+    
+    def run_continuous_with_intraday(self, duration_hours=7, intraday_analyzer=None, telegram_config=None):
+        """
+        Run continuous monitoring for specified hours with intraday analysis
         
         Args:
-            duration_hours: How long to monitor (market hours = ~7.5)
+            duration_hours: How long to monitor
+            intraday_analyzer: IntradayAnalyzer instance
+            telegram_config: Telegram config dict with bot_token and chat_id
         """
         self.is_running = True
         start_time = time.time()
@@ -304,6 +412,8 @@ class RealtimeMonitor:
         print(f"{Fore.CYAN}Symbol: {self.symbol}{Style.RESET_ALL}")
         print(f"{Fore.CYAN}Duration: {duration_hours} hours{Style.RESET_ALL}")
         print(f"{Fore.CYAN}Check Interval: {self.check_interval} seconds{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}Intraday Analysis: {'ENABLED' if intraday_analyzer else 'DISABLED'}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}Telegram Alerts: {'ENABLED' if telegram_config else 'DISABLED'}{Style.RESET_ALL}")
         print(f"{Fore.YELLOW}Starting at: {datetime.now().strftime('%H:%M:%S')}{Style.RESET_ALL}\n")
         
         try:
@@ -313,7 +423,7 @@ class RealtimeMonitor:
                 print(f"{Fore.CYAN}TICK #{self.tick_count} | {datetime.now().strftime('%H:%M:%S')}{Style.RESET_ALL}")
                 print(f"{Fore.CYAN}{'='*60}{Style.RESET_ALL}\n")
                 
-                self.run_once()
+                self.run_once(intraday_analyzer, telegram_config)
                 
                 elapsed = time.time() - start_time
                 remaining = duration_seconds - elapsed
@@ -340,8 +450,8 @@ class RealtimeMonitor:
         print(f"SESSION SUMMARY{Style.RESET_ALL}")
         print(f"{Fore.CYAN}{'='*60}{Style.RESET_ALL}\n")
         
-        print(f"📄 Symbol: {self.symbol}")
-        print(f"⏳ Total Ticks: {self.tick_count}")
+        print(f"📊 Symbol: {self.symbol}")
+        print(f"⏱️  Total Ticks: {self.tick_count}")
         print(f"🚨 Total Alerts: {len(self.alert_history)}")
         
         if self.alert_history:
